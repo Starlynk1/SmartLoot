@@ -1,0 +1,27 @@
+## Interface: 120100, 16001, 11509
+## Title: Smart Loot
+## Notes: Loot the most important items first and make bag space for them.
+## Author: Starlynk
+## Version: 0.1.0
+## SavedVariables: SmartLootDB
+## DefaultState: enabled
+## Category: Inventory
+## Category-enUS: Inventory
+## IconTexture: Interface\AddOns\SmartLoot\Art\SmartLoot-Icon
+
+# 120100 Retail, 16001 Forever, 11509 Classic Era. Add MoP and Anniversary when those clients are ready to test.
+
+Core/Flavor.lua
+Core/Init.lua
+Loot/Value.lua
+Loot/Priority.lua
+Loot/Inventory.lua
+Loot/Quests.lua
+Loot/Scanner.lua
+Loot/Engine.lua
+Loot/Rolls.lua
+UI/Skin.lua
+UI/DecisionFrame.lua
+UI/OptionsFrame.lua
+UI/MinimapButton.lua
+UI/EditMode.lua
