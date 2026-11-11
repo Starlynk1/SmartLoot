@@ -144,7 +144,14 @@ function Decision:Initialize()
 		GameTooltip:SetText("Loot help")
 		GameTooltip:AddLine("Click the lock to keep that item and pick another.", 1, 1, 1, true)
 		GameTooltip:AddLine("Click Skip to pass an openable.", 1, 1, 1, true)
-		GameTooltip:AddLine("Grey junk is deleted before Common or better.", 1, 1, 1, true)
+		local junkSource = addon.JunkSource and addon.JunkSource() or "quality"
+		if junkSource == "baganator" then
+			GameTooltip:AddLine("Baganator junk is deleted first.", 1, 1, 1, true)
+		elseif junkSource == "rxpguides" then
+			GameTooltip:AddLine("RestedXP junk is deleted first.", 1, 1, 1, true)
+		else
+			GameTooltip:AddLine("Grey junk is deleted before Common or better.", 1, 1, 1, true)
+		end
 		GameTooltip:AddLine("Quest items remove the cheapest item of any quality.", 1, 1, 1, true)
 		GameTooltip:AddLine("The Hearthstone stays.", 1, 1, 1, true)
 		GameTooltip:Show()

@@ -279,6 +279,135 @@ function addon.CreateButton(parent, text, width)
 	return button
 end
 
+local function DropdownLabel(choices, value)
+	for index = 1, #choices do
+		if choices[index].value == value then
+			return choices[index].text
+		end
+	end
+	return choices[1] and choices[1].text or ""
+end
+
+function addon.CreateOptionsDropdown(parent, fontOwner, width, choices, getSelected, setSelected)
+	local button = CreateFrame("Button", nil, parent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+	button:SetSize(width or 140, 24)
+	if button.SetBackdrop then
+		button:SetBackdrop({
+			bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			tile = true,
+			tileSize = 16,
+			edgeSize = 12,
+			insets = { left = 3, right = 3, top = 3, bottom = 3 },
+		})
+	end
+	local label = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	label:SetPoint("LEFT", 8, 0)
+	label:SetPoint("RIGHT", -18, 0)
+	label:SetJustifyH("LEFT")
+	addon.RegisterFontString(fontOwner or parent, label)
+	button.label = label
+	local arrow = button:CreateTexture(nil, "ARTWORK")
+	arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+	arrow:SetSize(14, 14)
+	arrow:SetPoint("RIGHT", -4, 0)
+
+	local menu = CreateFrame("Frame", nil, UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+	menu:SetFrameStrata("FULLSCREEN_DIALOG")
+	menu:SetToplevel(true)
+	menu:Hide()
+	if menu.SetBackdrop then
+		menu:SetBackdrop({
+			bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			tile = true,
+			tileSize = 16,
+			edgeSize = 12,
+			insets = { left = 3, right = 3, top = 3, bottom = 3 },
+		})
+	end
+	local catcher = CreateFrame("Button", nil, UIParent)
+	catcher:SetAllPoints(UIParent)
+	catcher:SetFrameStrata("FULLSCREEN_DIALOG")
+	catcher:Hide()
+
+	local rows = {}
+	local function CloseMenu()
+		menu:Hide()
+		catcher:Hide()
+	end
+
+	local function RefreshRows()
+		local selected = getSelected and getSelected()
+		for index = 1, #rows do
+			local row = rows[index]
+			if row.value == selected then
+				row:LockHighlight()
+			else
+				row:UnlockHighlight()
+			end
+		end
+		label:SetText(DropdownLabel(choices, selected))
+	end
+
+	local rowHeight = 20
+	for index = 1, #choices do
+		local choice = choices[index]
+		local row = CreateFrame("Button", nil, menu)
+		row:SetHeight(rowHeight)
+		row:SetPoint("TOPLEFT", 4, -4 - (index - 1) * rowHeight)
+		row:SetPoint("TOPRIGHT", -4, -4 - (index - 1) * rowHeight)
+		row.value = choice.value
+		row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+		local text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		text:SetPoint("LEFT", 6, 0)
+		text:SetPoint("RIGHT", -6, 0)
+		text:SetJustifyH("LEFT")
+		text:SetText(choice.text)
+		addon.RegisterFontString(fontOwner or parent, text)
+		row:SetScript("OnClick", function()
+			if setSelected then
+				setSelected(choice.value)
+			end
+			CloseMenu()
+			RefreshRows()
+		end)
+		rows[index] = row
+	end
+	menu:SetSize(width or 140, (#choices * rowHeight) + 8)
+
+	local function OpenMenu()
+		RefreshRows()
+		menu:ClearAllPoints()
+		menu:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, -2)
+		menu:SetWidth(button:GetWidth())
+		catcher:SetFrameLevel(math.max((menu:GetFrameLevel() or 1) - 1, 1))
+		menu:SetFrameLevel((catcher:GetFrameLevel() or 1) + 1)
+		catcher:Show()
+		menu:Show()
+	end
+
+	catcher:SetScript("OnClick", CloseMenu)
+	button:SetScript("OnClick", function()
+		if menu:IsShown() then
+			CloseMenu()
+		else
+			OpenMenu()
+		end
+	end)
+	button:SetScript("OnHide", CloseMenu)
+	if parent then
+		parent:HookScript("OnHide", CloseMenu)
+	end
+
+	function button:Refresh()
+		RefreshRows()
+	end
+
+	RefreshRows()
+	return button
+end
+
 function addon.CreateCheckbox(parent, name, label, fontOwner)
 	local box = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate")
 	local text = box.Text or _G[name .. "Text"]

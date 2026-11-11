@@ -2,8 +2,9 @@
 ## Title: Smart Loot
 ## Notes: Loot the most important items first and make bag space for them.
 ## Author: Starlynk
-## Version: 0.1.0
+## Version: 0.1.1
 ## SavedVariables: SmartLootDB
+## OptionalDeps: Baganator, RXPGuides
 ## DefaultState: enabled
 ## Category: Inventory
 ## Category-enUS: Inventory
@@ -14,6 +15,7 @@
 Core/Flavor.lua
 Core/Init.lua
 Loot/Value.lua
+Loot/Junk.lua
 Loot/Priority.lua
 Loot/Inventory.lua
 Loot/Quests.lua

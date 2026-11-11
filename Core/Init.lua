@@ -1,7 +1,7 @@
 local addon = SmartLoot or {}
 SmartLoot = addon
 
-addon.VERSION = "0.1.0"
+addon.VERSION = "0.1.1"
 
 local DEFAULTS = {
 	enabled = true,
@@ -9,6 +9,7 @@ local DEFAULTS = {
 	autoDestroyMaxQuality = 0,
 	autoCloseLeftover = 5,
 	protectCraftingReagents = true,
+	junkSource = "quality",
 	keepSoulShards = 0,
 	keepConjured = 0,
 	keepAmmo = 0,
@@ -158,6 +159,9 @@ function addon:Initialize()
 		closeAfter = 15
 	end
 	self.db.autoCloseLeftover = math.floor(closeAfter + 0.5)
+	if self.db.junkSource ~= "baganator" and self.db.junkSource ~= "rxpguides" then
+		self.db.junkSource = "quality"
+	end
 	if self.Decision then
 		self.Decision:Initialize()
 	end

@@ -133,6 +133,24 @@ function Options:BuildLootPage()
 	self.qualityButton = quality
 	y = y - 40
 
+	local junkLabel = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	junkLabel:SetPoint("TOPLEFT", page, "TOPLEFT", 20, y)
+	junkLabel:SetText("Destroy junk from")
+	addon.RegisterFontString(frame, junkLabel)
+	self.junkSourceLabel = junkLabel
+	local junk = addon.CreateOptionsDropdown(page, frame, 140, {
+		{ value = "quality", text = "Grey items" },
+		{ value = "baganator", text = "Baganator" },
+		{ value = "rxpguides", text = "RestedXP" },
+	}, function()
+		return addon.JunkSource and addon.JunkSource() or "quality"
+	end, function(value)
+		Options:SetJunkSource(value)
+	end)
+	junk:SetPoint("LEFT", junkLabel, "RIGHT", 12, 0)
+	self.junkSourceDropdown = junk
+	y = y - 40
+
 	local closeLabel = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	closeLabel:SetPoint("TOPLEFT", page, "TOPLEFT", 20, y)
 	closeLabel:SetText("Auto-close leftover loot")
@@ -517,6 +535,26 @@ local AUTO_DESTROY_QUALITY = {
 	[2] = "Green",
 }
 
+function Options:SetJunkSource(value)
+	if not addon.db then
+		return
+	end
+	if value ~= "baganator" and value ~= "rxpguides" then
+		value = "quality"
+	end
+	addon.db.junkSource = value
+	self:RefreshJunkSource()
+	if addon.Inventory and addon.Inventory.RefreshCache then
+		addon.Inventory.RefreshCache()
+	end
+end
+
+function Options:RefreshJunkSource()
+	if self.junkSourceDropdown and self.junkSourceDropdown.Refresh then
+		self.junkSourceDropdown:Refresh()
+	end
+end
+
 function Options:CycleAutoDestroyQuality()
 	if not addon.db or not addon.db.autoDestroy then
 		return
@@ -635,6 +673,7 @@ function Options:Refresh()
 	end
 	self.checks.enabled:SetChecked(addon.db.enabled)
 	self:RefreshAutoDestroy()
+	self:RefreshJunkSource()
 	self:RefreshAutoClose()
 	self.checks.protectCraftingReagents:SetChecked(addon.db.protectCraftingReagents)
 	self.checks.useAuctionValue:SetChecked(addon.db.useAuctionValue)

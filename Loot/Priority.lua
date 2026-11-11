@@ -256,8 +256,13 @@ local function SortLoot(left, right)
 	return (left.slot or 0) < (right.slot or 0)
 end
 
--- Poor junk first, then Common, then better. Cheapest coin within a quality.
+-- Marked junk first, then Poor before Common, then cheapest coin.
 function addon.SortDestroyCandidate(left, right)
+	local leftJunk = left.markedJunk and 0 or 1
+	local rightJunk = right.markedJunk and 0 or 1
+	if leftJunk ~= rightJunk then
+		return leftJunk < rightJunk
+	end
 	local leftQuality = left.quality or 0
 	local rightQuality = right.quality or 0
 	if leftQuality ~= rightQuality then
@@ -439,12 +444,15 @@ function addon.BuildPlan(lootItems, bagItems, freeSlots, options)
 	end
 
 	local slots = CopyArray(freeSlots)
-	-- Poor junk first, then cheaper coin within the same quality.
+	-- Marked junk first, then cheaper coin within the same quality.
 	local pool = {}
 	for _, item in ipairs(bagItems) do
 		if not item.locked then
 			local copy = ShallowCopy(item)
 			copy.value = addon.ItemValue(item)
+			if copy.markedJunk == nil and addon.IsMarkedJunk then
+				copy.markedJunk = addon.IsMarkedJunk(copy) and true or false
+			end
 			pool[#pool + 1] = copy
 		end
 	end
@@ -507,7 +515,7 @@ function addon.BuildPlan(lootItems, bagItems, freeSlots, options)
 		return chosen
 	end
 
-	-- Regular loot: cheapest Poor junk, then cheaper Common or better.
+	-- Regular loot: marked junk first, then cheapest Poor, then Common or better.
 	local function CanRegularDelete(candidate)
 		if IsNeededItem(candidate, options, neededItemIDs, soul) then
 			return false

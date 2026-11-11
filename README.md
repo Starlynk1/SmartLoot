@@ -3,7 +3,7 @@
 World of Warcraft addon that loots the most important items first and makes bag space for them.
 
 **Author:** Starlynk  
-**Version:** 0.1.0  
+**Version:** 0.1.1  
 **License:** [GNU GPL v3](LICENSE)
 
 ## Clients

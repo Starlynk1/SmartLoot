@@ -1,5 +1,6 @@
 SmartLoot = {}
 dofile("Loot/Value.lua")
+dofile("Loot/Junk.lua")
 dofile("Loot/Priority.lua")
 
 local checks = 0
@@ -60,6 +61,40 @@ do
 		{ name = "Refreshing Spring Water", bag = 0, slot = 3, itemID = 159, quality = 1, count = 1, maxStack = 20, unitPrice = 1, bagFamily = 0, classID = 0, subclassID = 5 },
 	}, {})
 	Expect("junk is deleted before cheap food and water", Names(plan.sacrifices) == "Grey Junk")
+end
+
+do
+	SmartLoot.db = { junkSource = "rxpguides" }
+	function SmartLoot.IsRXPJunk(item)
+		return item.name == "Marked White"
+	end
+	local plan = Plan({
+		{ name = "Sword", slot = 1, lootType = "item", itemID = 10, count = 1, maxStack = 1, unitPrice = 1000 },
+	}, {
+		{ name = "Grey Junk", bag = 0, slot = 1, itemID = 2, quality = 0, count = 1, maxStack = 1, unitPrice = 50, bagFamily = 0 },
+		{ name = "Marked White", bag = 0, slot = 2, itemID = 118, quality = 1, count = 1, maxStack = 20, unitPrice = 80, bagFamily = 0 },
+		{ name = "Tough Jerky", bag = 0, slot = 3, itemID = 117, quality = 1, count = 1, maxStack = 20, unitPrice = 1, bagFamily = 0 },
+	}, {})
+	Expect("RestedXP marked junk is deleted before unmarked food", Names(plan.sacrifices) == "Marked White")
+	SmartLoot.IsRXPJunk = nil
+	SmartLoot.db = nil
+end
+
+do
+	SmartLoot.db = { junkSource = "baganator" }
+	function SmartLoot.IsBaganatorJunk(item)
+		return item.name == "Bag Junk"
+	end
+	local plan = Plan({
+		{ name = "Sword", slot = 1, lootType = "item", itemID = 10, count = 1, maxStack = 1, unitPrice = 1000 },
+	}, {
+		{ name = "Grey Junk", bag = 0, slot = 1, itemID = 2, quality = 0, count = 1, maxStack = 1, unitPrice = 50, bagFamily = 0 },
+		{ name = "Bag Junk", bag = 0, slot = 2, itemID = 119, quality = 1, count = 1, maxStack = 20, unitPrice = 80, bagFamily = 0 },
+		{ name = "Tough Jerky", bag = 0, slot = 3, itemID = 117, quality = 1, count = 1, maxStack = 20, unitPrice = 1, bagFamily = 0 },
+	}, {})
+	Expect("Baganator marked junk is deleted before unmarked food", Names(plan.sacrifices) == "Bag Junk")
+	SmartLoot.IsBaganatorJunk = nil
+	SmartLoot.db = nil
 end
 
 do
