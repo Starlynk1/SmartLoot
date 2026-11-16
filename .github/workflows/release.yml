@@ -6,8 +6,8 @@
 #   Name: CF_API_KEY
 #   Value: CurseForge API token from https://authors.curseforge.com/#/settings/api-tokens
 #
-# After the CurseForge project exists, set the project id in SmartLoot.toc:
-#   ## X-Curse-Project-ID: <project id>
+# CurseForge project id is set in SmartLoot.toc:
+#   ## X-Curse-Project-ID: 1809065
 
 name: Package and release
 

@@ -1,7 +1,7 @@
 local addon = SmartLoot or {}
 SmartLoot = addon
 
-addon.VERSION = "0.1.2"
+addon.VERSION = "0.1.3"
 
 local DEFAULTS = {
 	enabled = true,

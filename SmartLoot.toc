@@ -2,7 +2,7 @@
 ## Title: Smart Loot
 ## Notes: Loot the most important items first and make bag space for them.
 ## Author: Starlynk
-## Version: 0.1.2
+## Version: 0.1.3
 ## SavedVariables: SmartLootDB
 ## OptionalDeps: Baganator, RXPGuides, Pawn
 ## DefaultState: enabled
@@ -11,7 +11,8 @@
 ## IconTexture: Interface\AddOns\SmartLoot\Art\SmartLoot-Icon
 ## X-Category: Inventory
 ## X-License: GPLv3
-## X-Website: https://github.com/Starlynk1/SmartLoot
+## X-Website: https://www.curseforge.com/wow/addons/smart-loot
+## X-Curse-Project-ID: 1809065
 
 # 120100 Retail, 16001 Forever, 11509 Classic Era. Add MoP and Anniversary when those clients are ready to test.
 
