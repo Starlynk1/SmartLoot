@@ -24,8 +24,6 @@ function Options:Initialize()
 	local content = addon.ContentRegion(frame)
 	self.lootPage = CreateFrame("Frame", nil, content)
 	self.lootPage:SetAllPoints(content)
-	self.rollPage = CreateFrame("Frame", nil, content)
-	self.rollPage:SetAllPoints(content)
 	self.protectPage = CreateFrame("Frame", nil, content)
 	self.protectPage:SetAllPoints(content)
 
@@ -67,7 +65,6 @@ function Options:Initialize()
 		self.input:ClearFocus()
 	end)
 
-	self:BuildRollPage()
 	self:CreateTabs(frame)
 	self:Refresh()
 	self:HookBags()
@@ -286,86 +283,6 @@ function Options:RefreshWarlockSection()
 	end
 end
 
-function Options:BuildRollPage()
-	local frame = self.frame
-	local page = self.rollPage
-	local roll = addon.CreateCheckbox(page, "SmartLootCheckAutoRoll", "Auto-roll in a party or raid", frame)
-	roll:SetPoint("TOPLEFT", page, "TOPLEFT", 10, -4)
-	roll:SetScript("OnClick", function(box)
-		addon.db.autoRoll = box:GetChecked() and true or false
-	end)
-	self.rollCheck = roll
-
-	local levelLabel = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	levelLabel:SetPoint("TOPLEFT", page, "TOPLEFT", 16, -44)
-	levelLabel:SetText("Minimum item level")
-	addon.RegisterFontString(frame, levelLabel)
-
-	local level = CreateFrame("EditBox", "SmartLootRollLevel", page, "InputBoxTemplate")
-	level:SetSize(64, 22)
-	level:SetPoint("LEFT", levelLabel, "RIGHT", 16, 0)
-	level:SetAutoFocus(false)
-	level:SetNumeric(true)
-	level:SetMaxLetters(4)
-	level:SetScript("OnEnterPressed", function(box)
-		box:ClearFocus()
-	end)
-	level:SetScript("OnEscapePressed", function(box)
-		box:ClearFocus()
-	end)
-	level:SetScript("OnEditFocusLost", function(box)
-		Options:CommitRollLevel(box)
-	end)
-	self.rollLevel = level
-
-	local transmog = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	transmog:SetPoint("TOPLEFT", page, "TOPLEFT", 16, -84)
-	transmog:SetText("Missing transmog")
-	addon.RegisterFontString(frame, transmog)
-	self.transmogLabel = transmog
-
-	local need = addon.CreateCheckbox(page, "SmartLootCheckTransmogNeed", "Need", frame)
-	need:SetPoint("TOPLEFT", page, "TOPLEFT", 10, -108)
-	local needText = need.Text or _G["SmartLootCheckTransmogNeedText"]
-	if needText then
-		needText:SetWidth(70)
-	end
-	need:SetScript("OnClick", function()
-		addon.db.transmogRoll = "need"
-		Options:RefreshRolls()
-	end)
-	self.transmogNeed = need
-
-	local greed = addon.CreateCheckbox(page, "SmartLootCheckTransmogGreed", "Greed", frame)
-	greed:SetPoint("LEFT", need, "RIGHT", 120, 0)
-	local greedText = greed.Text or _G["SmartLootCheckTransmogGreedText"]
-	if greedText then
-		greedText:SetWidth(70)
-	end
-	greed:SetScript("OnClick", function()
-		addon.db.transmogRoll = "greed"
-		Options:RefreshRolls()
-	end)
-	self.transmogGreed = greed
-
-	local note = page:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-	note:SetPoint("TOPLEFT", page, "TOPLEFT", 16, -156)
-	note:SetWidth(380)
-	note:SetJustifyH("LEFT")
-	note:SetText("Need when the item is usable and a higher item level than the weaker piece in that slot. Otherwise greed. Items under the minimum item level stay on the roll window. An upgrade still needs when missing transmog is set to greed.")
-	addon.RegisterFontString(frame, note)
-	self.rollNote = note
-end
-
-function Options:CommitRollLevel(box)
-	local number = tonumber(box:GetText())
-	if not number or number < 0 then
-		number = addon.db.rollMinItemLevel or 1
-	end
-	addon.db.rollMinItemLevel = math.floor(number)
-	box:SetText(tostring(addon.db.rollMinItemLevel))
-end
-
 function Options:CommitKeepSoulShards(box)
 	local number = tonumber(box:GetText())
 	if not number or number < 0 then
@@ -375,48 +292,12 @@ function Options:CommitKeepSoulShards(box)
 	box:SetText(tostring(addon.db.keepSoulShards))
 end
 
-function Options:RefreshRolls()
-	if not self.rollCheck or not addon.db then
-		return
-	end
-	self.rollCheck:SetChecked(addon.db.autoRoll)
-	if not self.rollLevel:HasFocus() then
-		self.rollLevel:SetText(tostring(addon.db.rollMinItemLevel or 1))
-	end
-	local hasTransmog = addon.HasTransmog and addon.HasTransmog()
-	if self.transmogLabel then
-		self.transmogLabel:SetShown(hasTransmog and true or false)
-	end
-	if self.transmogNeed then
-		self.transmogNeed:SetShown(hasTransmog and true or false)
-	end
-	if self.transmogGreed then
-		self.transmogGreed:SetShown(hasTransmog and true or false)
-	end
-	if self.rollNote then
-		if hasTransmog then
-			self.rollNote:SetPoint("TOPLEFT", self.rollPage, "TOPLEFT", 16, -156)
-			self.rollNote:SetText("Need when the item is usable and a higher item level than the weaker piece in that slot. Otherwise greed. Items under the minimum item level stay on the roll window. An upgrade still needs when missing transmog is set to greed.")
-		else
-			self.rollNote:SetPoint("TOPLEFT", self.rollPage, "TOPLEFT", 16, -84)
-			self.rollNote:SetText("Need when the item is usable and a higher item level than the weaker piece in that slot. Otherwise greed. Items under the minimum item level stay on the roll window.")
-		end
-	end
-	if not hasTransmog then
-		return
-	end
-	local need = addon.db.transmogRoll == "need"
-	self.transmogNeed:SetChecked(need)
-	self.transmogGreed:SetChecked(not need)
-end
-
 local TAB_ICONS = {
 	"Interface\\AddOns\\SmartLoot\\Art\\SmartLoot-Portrait",
-	"Interface\\Icons\\INV_Misc_Dice_02",
 	"Interface\\Icons\\INV_Misc_Key_03",
 }
-local TAB_TIPS = { "Loot", "Rolls", "Protected" }
-local TAB_LABELS = { "Loot", "Rolls", "Protected" }
+local TAB_TIPS = { "Loot", "Protected" }
+local TAB_LABELS = { "Loot", "Protected" }
 
 function Options:CreateTabs(frame)
 	self.tabs = {}
@@ -516,8 +397,7 @@ end
 function Options:ShowPage(page)
 	self.page = page
 	self.lootPage:SetShown(page == 1)
-	self.rollPage:SetShown(page == 2)
-	self.protectPage:SetShown(page == 3)
+	self.protectPage:SetShown(page == 2)
 	if addon.UsesSideOptionsTabs and addon.UsesSideOptionsTabs() then
 		for index = 1, #self.tabs do
 			self.tabs[index]:SetChecked(index == page)
@@ -687,7 +567,6 @@ function Options:Refresh()
 	self.checks.showCompartment:SetChecked(addon.db.minimap.showCompartment)
 	local compartment = addon.Minimap and addon.Minimap:HasCompartment()
 	self.checks.showCompartment:SetShown(compartment and true or false)
-	self:RefreshRolls()
 	self:RefreshProtected()
 end
 
@@ -792,7 +671,7 @@ function Options:TryProtectFromBag(button)
 	end
 	local info = C_Container.GetContainerItemInfo(bag, slot)
 	addon:ProtectItem(itemID, info and info.itemName)
-	self:ShowPage(3)
+	self:ShowPage(2)
 end
 
 function Options:HookBags()

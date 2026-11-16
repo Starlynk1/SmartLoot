@@ -1,7 +1,11 @@
+.release/
+.env
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.bak
+*.tmp
 .cursor/
 .vscode/
 *.log
-Thumbs.db
-Desktop.ini
-.DS_Store
 Art/_portrait_src_debug.png

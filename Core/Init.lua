@@ -1,7 +1,7 @@
 local addon = SmartLoot or {}
 SmartLoot = addon
 
-addon.VERSION = "0.1.1"
+addon.VERSION = "0.1.2"
 
 local DEFAULTS = {
 	enabled = true,
@@ -15,7 +15,6 @@ local DEFAULTS = {
 	keepAmmo = 0,
 	useAuctionValue = true,
 	autoRoll = false,
-	rollMinItemLevel = 1,
 	transmogRoll = "greed",
 	protected = {},
 	minimap = {
@@ -162,6 +161,8 @@ function addon:Initialize()
 	if self.db.junkSource ~= "baganator" and self.db.junkSource ~= "rxpguides" then
 		self.db.junkSource = "quality"
 	end
+	self.db.autoRoll = false
+	self.db.rollMinItemLevel = nil
 	if self.Decision then
 		self.Decision:Initialize()
 	end
@@ -176,9 +177,6 @@ function addon:Initialize()
 	end
 	if self.Engine then
 		self.Engine:Initialize()
-	end
-	if self.Rolls then
-		self.Rolls:Initialize()
 	end
 	self:SetEnabled(self.db.enabled, true)
 	if self.EditMode then

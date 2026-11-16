@@ -1,0 +1,17 @@
+package-as: SmartLoot
+
+manual-changelog:
+  filename: RELEASENOTES.md
+  markup-type: markdown
+
+ignore:
+  - .cursor
+  - .github
+  - .gitignore
+  - Tests
+  - AddonNotes.md
+  - Art/_portrait_src_debug.png
+  - Art/SmartLoot-Icon.png
+  - Art/SmartLoot-Portrait.png
+  - Art/SmartLoot-Minimap.jpg
+  - Art/SmartLoot.png

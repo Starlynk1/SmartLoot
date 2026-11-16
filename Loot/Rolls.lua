@@ -4,6 +4,9 @@ SmartLoot = addon
 local Rolls = {}
 addon.Rolls = Rolls
 
+local CLASS_MISC = 15
+local SUBCLASS_MOUNT = 5
+
 local SLOTS = {
 	INVTYPE_HEAD = { 1 },
 	INVTYPE_NECK = { 2 },
@@ -31,19 +34,48 @@ local SLOTS = {
 
 function addon.ChooseRoll(item, settings)
 	settings = settings or {}
-	local minimum = tonumber(settings.minItemLevel) or 0
-	local level = tonumber(item.itemLevel)
-	if not level or level < minimum then
+	local transmogRoll = settings.transmogRoll or "greed"
+	if item.isMount then
+		if item.hasMount then
+			return "pass"
+		end
+		if item.canNeed then
+			return "need"
+		end
+		if item.canGreed then
+			return "greed"
+		end
 		return nil
 	end
-	local need = false
-	if item.isGear and item.usable and item.upgrade then
-		need = true
-	elseif item.isGear and item.missingTransmog and settings.transmogRoll == "need" then
-		need = true
+	if item.isGear ~= false and item.usable ~= false and (item.upgrade == "main" or item.upgrade == true) then
+		if item.canNeed then
+			return "need"
+		end
+		if item.canGreed then
+			return "greed"
+		end
+		return nil
 	end
-	if need and item.canNeed then
-		return "need"
+	if item.upgrade == "offspec" then
+		if item.canNeed then
+			return "ask-offspec"
+		end
+		if item.canGreed then
+			return "greed"
+		end
+		return nil
+	end
+	if item.missingTransmog then
+		if transmogRoll == "pass" then
+			return "pass"
+		end
+		if transmogRoll == "need" and item.canNeed then
+			return "need"
+		end
+		if item.canGreed then
+			return "greed"
+		end
+		return nil
 	end
 	if item.canGreed then
 		return "greed"
@@ -88,17 +120,28 @@ local function EquipLoc(link)
 	return loc
 end
 
-local function RollNumber(choice)
-	if Enum and Enum.LootRollType then
-		if choice == "need" then
-			return Enum.LootRollType.Need or 1
+local function ItemID(link)
+	if not link then
+		return nil
+	end
+	if C_Item and C_Item.GetItemInfoInstant then
+		local id = C_Item.GetItemInfoInstant(link)
+		if id then
+			return id
 		end
-		return Enum.LootRollType.Greed or 2
 	end
+	return tonumber(string.match(link, "item:(%d+)"))
+end
+
+local function RollNumber(choice)
+	local types = Enum and Enum.LootRollType
 	if choice == "need" then
-		return 1
+		return types and types.Need or 1
 	end
-	return 2
+	if choice == "pass" then
+		return types and types.Pass or 0
+	end
+	return types and types.Greed or 2
 end
 
 function Rolls:SlotsFor(equipLoc)
@@ -121,40 +164,90 @@ function Rolls:InGroup()
 	return false
 end
 
-function Rolls:MainHandIsTwoHand()
-	if not GetInventoryItemLink then
-		return false
+function Rolls:CurrentSpecIndex()
+	if C_SpecializationInfo and C_SpecializationInfo.GetSpecialization then
+		return C_SpecializationInfo.GetSpecialization()
 	end
-	local link = GetInventoryItemLink("player", 16)
-	return EquipLoc(link) == "INVTYPE_2HWEAPON"
+	if GetSpecialization then
+		return GetSpecialization()
+	end
+	if GetPrimaryTalentTree then
+		return GetPrimaryTalentTree()
+	end
+	if not GetNumTalentTabs or not GetTalentTabInfo then
+		return nil
+	end
+	local bestIndex
+	local bestPoints = -1
+	for index = 1, GetNumTalentTabs() or 0 do
+		local _, _, pointsSpent = GetTalentTabInfo(index)
+		local points = type(pointsSpent) == "number" and pointsSpent or 0
+		if points > bestPoints then
+			bestPoints = points
+			bestIndex = index
+		end
+	end
+	return bestIndex
 end
 
-function Rolls:IsUpgrade(link, equipLoc)
-	local slots = self:SlotsFor(equipLoc)
-	if not slots or not GetInventoryItemLink then
-		return false
+function Rolls:ScaleKind(scale)
+	if not scale then
+		return "main"
 	end
-	local usesWeapon = false
-	for index = 1, #slots do
-		if slots[index] == 16 or slots[index] == 17 then
-			usesWeapon = true
+	local classID
+	if UnitClass then
+		classID = select(3, UnitClass("player"))
+	end
+	if scale.ClassID and classID and scale.ClassID ~= classID then
+		return nil
+	end
+	if not scale.SpecID then
+		return "main"
+	end
+	local spec = self:CurrentSpecIndex()
+	if not spec or scale.SpecID == spec then
+		return "main"
+	end
+	return "offspec"
+end
+
+function Rolls:PawnUpgradeKind(link)
+	if not link or not PawnGetItemData or not PawnIsItemAnUpgrade then
+		return nil, false
+	end
+	if PawnIsReady and not PawnIsReady() then
+		return nil, true
+	end
+	local ok, item = pcall(PawnGetItemData, link)
+	if not ok or not item then
+		return nil, false
+	end
+	if item.Link == nil then
+		return nil, true
+	end
+	local upgradeOk, upgrades = pcall(PawnIsItemAnUpgrade, item)
+	if not upgradeOk or type(upgrades) ~= "table" or #upgrades == 0 then
+		return nil, false
+	end
+	local hasMain
+	local hasOff
+	for index = 1, #upgrades do
+		local name = upgrades[index] and upgrades[index].ScaleName
+		local scale = PawnCommon and PawnCommon.Scales and name and PawnCommon.Scales[name]
+		local kind = self:ScaleKind(scale)
+		if kind == "main" then
+			hasMain = true
+		elseif kind == "offspec" then
+			hasOff = true
 		end
 	end
-	if usesWeapon and self:MainHandIsTwoHand() then
-		slots = { 16 }
+	if hasMain then
+		return "main", false
 	end
-	local weakest
-	for index = 1, #slots do
-		local equipped = GetInventoryItemLink("player", slots[index])
-		if not equipped then
-			return true
-		end
-		local level = ItemLevel(equipped) or 0
-		if not weakest or level < weakest then
-			weakest = level
-		end
+	if hasOff then
+		return "offspec", false
 	end
-	return (ItemLevel(link) or 0) > (weakest or 0)
+	return nil, false
 end
 
 function Rolls:IsUsable(link)
@@ -189,6 +282,52 @@ function Rolls:MissingTransmog(link, canTransmog)
 	return not known
 end
 
+function Rolls:MountInfo(link)
+	local id = ItemID(link)
+	local mountID
+	if id and C_MountJournal and C_MountJournal.GetMountFromItem then
+		local ok, found = pcall(C_MountJournal.GetMountFromItem, id)
+		if ok then
+			mountID = found
+		end
+	end
+	local classID, subclassID
+	if C_Item and C_Item.GetItemInfoInstant then
+		classID, subclassID = select(6, C_Item.GetItemInfoInstant(link))
+	elseif GetItemInfoInstant then
+		classID, subclassID = select(6, GetItemInfoInstant(link))
+	end
+	local misc = Enum and Enum.ItemClass and Enum.ItemClass.Miscellaneous or CLASS_MISC
+	local mountSub = Enum and Enum.ItemMiscellaneousSubclass and Enum.ItemMiscellaneousSubclass.Mount or SUBCLASS_MOUNT
+	local isMount = mountID ~= nil or (classID == misc and subclassID == mountSub)
+	if not isMount then
+		return false, false
+	end
+	if mountID and C_MountJournal and C_MountJournal.GetMountInfoByID then
+		local ok, collected = pcall(function()
+			return select(11, C_MountJournal.GetMountInfoByID(mountID))
+		end)
+		if ok then
+			return true, collected and true or false
+		end
+	end
+	if id and GetItemSpell then
+		local _, spellID = GetItemSpell(id)
+		if type(spellID) ~= "number" then
+			_, _, spellID = GetItemSpell(id)
+		end
+		if type(spellID) == "number" then
+			if IsPlayerSpell and IsPlayerSpell(spellID) then
+				return true, true
+			end
+			if IsSpellKnown and IsSpellKnown(spellID) then
+				return true, true
+			end
+		end
+	end
+	return true, false
+end
+
 function Rolls:ReadRoll(rollID)
 	if not GetLootRollItemInfo then
 		return nil
@@ -199,41 +338,199 @@ end
 function Rolls:Decide(rollID, link)
 	local info = self:ReadRoll(rollID)
 	if not info or (not info[1] and not info[2]) then
-		return nil
+		return nil, false
 	end
 	local canNeed, canGreed, canTransmog = info[6], info[7], info[13]
+	local isMount, hasMount = self:MountInfo(link)
 	local equipLoc = EquipLoc(link)
 	local isGear = equipLoc ~= nil
+	local upgrade, pending = nil, false
+	if isGear then
+		upgrade, pending = self:PawnUpgradeKind(link)
+	end
 	local item = {
-		itemLevel = ItemLevel(link),
+		isMount = isMount,
+		hasMount = hasMount,
 		isGear = isGear,
 		usable = isGear and self:IsUsable(link) or false,
-		upgrade = isGear and self:IsUpgrade(link, equipLoc) or false,
+		upgrade = upgrade,
 		missingTransmog = isGear and self:MissingTransmog(link, canTransmog) or false,
 		canNeed = canNeed and true or false,
 		canGreed = canGreed and true or false,
 	}
 	return addon.ChooseRoll(item, {
-		minItemLevel = addon.db.rollMinItemLevel,
-		transmogRoll = addon.db.transmogRoll,
-	})
+		transmogRoll = addon.db and addon.db.transmogRoll or "greed",
+	}), pending
 end
 
-function Rolls:RollNow(rollID)
-	if self.pending[rollID] or not GetLootRollItemLink or not RollOnLoot then
-		return
-	end
-	local link = GetLootRollItemLink(rollID)
-	if not link or not ItemLevel(link) then
-		return
-	end
-	local choice = self:Decide(rollID, link)
-	if not choice then
+function Rolls:ApplyChoice(rollID, choice)
+	if not choice or choice == "ask-offspec" or not RollOnLoot then
 		return
 	end
 	local rollType = RollNumber(choice)
 	self.pending[rollID] = rollType
 	RollOnLoot(rollID, rollType)
+end
+
+function Rolls:EnsurePrompt()
+	if self.prompt then
+		return
+	end
+	local frame = CreateFrame("Frame", "SmartLootRollPrompt", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+	frame:SetSize(360, 120)
+	frame:SetPoint("CENTER", 0, 80)
+	frame:SetFrameStrata("DIALOG")
+	frame:SetClampedToScreen(true)
+	frame:EnableMouse(true)
+	frame:SetMovable(true)
+	frame:RegisterForDrag("LeftButton")
+	frame:SetScript("OnDragStart", function(self)
+		self:StartMoving()
+	end)
+	frame:SetScript("OnDragStop", function(self)
+		self:StopMovingOrSizing()
+	end)
+	if frame.SetBackdrop then
+		frame:SetBackdrop({
+			bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+			edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+			tile = true,
+			tileSize = 32,
+			edgeSize = 32,
+			insets = { left = 11, right = 12, top = 12, bottom = 11 },
+		})
+	end
+	local iconButton = CreateFrame("Button", nil, frame)
+	iconButton:SetSize(36, 36)
+	iconButton:SetPoint("TOPLEFT", 18, -18)
+	local icon = iconButton:CreateTexture(nil, "ARTWORK")
+	icon:SetAllPoints()
+	iconButton:SetScript("OnEnter", function(owner)
+		if Rolls.promptLink and GameTooltip then
+			GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+			GameTooltip:SetHyperlink(Rolls.promptLink)
+			GameTooltip:Show()
+		end
+	end)
+	iconButton:SetScript("OnLeave", function()
+		if GameTooltip then
+			GameTooltip:Hide()
+		end
+	end)
+	local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	title:SetPoint("TOPLEFT", iconButton, "TOPRIGHT", 10, -2)
+	title:SetPoint("RIGHT", frame, "RIGHT", -18, 0)
+	title:SetJustifyH("LEFT")
+	title:SetText("Off-spec item")
+	local name = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	name:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+	name:SetPoint("RIGHT", frame, "RIGHT", -18, 0)
+	name:SetJustifyH("LEFT")
+	local help = frame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+	help:SetPoint("TOPLEFT", iconButton, "BOTTOMLEFT", 0, -8)
+	help:SetPoint("RIGHT", frame, "RIGHT", -18, 0)
+	help:SetJustifyH("LEFT")
+	help:SetText("This is an off-spec upgrade. Need or Greed?")
+	local need = addon.CreateButton(frame, "Need", 90)
+	need:SetPoint("BOTTOMLEFT", 40, 16)
+	need:SetScript("OnClick", function()
+		Rolls:AnswerPrompt("need")
+	end)
+	local greed = addon.CreateButton(frame, "Greed", 90)
+	greed:SetPoint("LEFT", need, "RIGHT", 16, 0)
+	greed:SetScript("OnClick", function()
+		Rolls:AnswerPrompt("greed")
+	end)
+	frame:Hide()
+	self.prompt = frame
+	self.promptIcon = icon
+	self.promptName = name
+end
+
+function Rolls:HidePrompt()
+	if self.prompt then
+		self.prompt:Hide()
+	end
+	self.promptRollID = nil
+	self.promptLink = nil
+end
+
+function Rolls:ShowOffSpecPrompt(rollID, link, texture, itemName)
+	self:EnsurePrompt()
+	self.promptRollID = rollID
+	self.promptLink = link
+	self.promptIcon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
+	self.promptName:SetText(itemName or link or "Item")
+	self.prompt:Show()
+end
+
+function Rolls:AnswerPrompt(choice)
+	local rollID = self.promptRollID
+	self:HidePrompt()
+	if rollID then
+		self:ApplyChoice(rollID, choice)
+	end
+	self:NextQueued()
+end
+
+function Rolls:Enqueue(rollID, link, texture, itemName)
+	self.queue = self.queue or {}
+	self.queue[#self.queue + 1] = {
+		rollID = rollID,
+		link = link,
+		texture = texture,
+		name = itemName,
+	}
+end
+
+function Rolls:NextQueued()
+	local queue = self.queue
+	if not queue or #queue == 0 then
+		return
+	end
+	local nextPrompt = table.remove(queue, 1)
+	if self.pending[nextPrompt.rollID] then
+		self:NextQueued()
+		return
+	end
+	self:ShowOffSpecPrompt(nextPrompt.rollID, nextPrompt.link, nextPrompt.texture, nextPrompt.name)
+end
+
+function Rolls:RollNow(rollID)
+	if self.pending[rollID] or not GetLootRollItemLink then
+		return
+	end
+	local link = GetLootRollItemLink(rollID)
+	if not link then
+		return
+	end
+	local choice, pending = self:Decide(rollID, link)
+	if pending then
+		self.wait = self.wait or {}
+		local tries = (self.wait[rollID] or 0) + 1
+		self.wait[rollID] = tries
+		if tries <= 10 and C_Timer and C_Timer.After then
+			C_Timer.After(0.3, function()
+				if addon.db and addon.db.autoRoll then
+					Rolls:RollNow(rollID)
+				end
+			end)
+			return
+		end
+	end
+	if self.wait then
+		self.wait[rollID] = nil
+	end
+	if choice == "ask-offspec" then
+		local info = self:ReadRoll(rollID) or {}
+		if self.promptRollID then
+			self:Enqueue(rollID, link, info[1], info[2])
+		else
+			self:ShowOffSpecPrompt(rollID, link, info[1], info[2])
+		end
+		return
+	end
+	self:ApplyChoice(rollID, choice)
 end
 
 function Rolls:OnStart(rollID)
@@ -250,15 +547,17 @@ function Rolls:OnStart(rollID)
 	if not link then
 		return
 	end
-	if ItemLevel(link) then
+	if ItemLevel(link) or ItemID(link) then
 		self:RollNow(rollID)
 		return
 	end
 	if not Item or not Item.CreateFromItemLink then
+		self:RollNow(rollID)
 		return
 	end
 	local item = Item:CreateFromItemLink(link)
 	if not item or not item.ContinueOnItemLoad then
+		self:RollNow(rollID)
 		return
 	end
 	item:ContinueOnItemLoad(function()
@@ -276,11 +575,28 @@ function Rolls:OnConfirm(rollID, rollType)
 	ConfirmLootRoll(rollID, rollType)
 end
 
+function Rolls:OnCancel(rollID)
+	self.pending[rollID] = nil
+	if self.promptRollID == rollID then
+		self:HidePrompt()
+		self:NextQueued()
+	elseif self.queue then
+		local kept = {}
+		for index = 1, #self.queue do
+			if self.queue[index].rollID ~= rollID then
+				kept[#kept + 1] = self.queue[index]
+			end
+		end
+		self.queue = kept
+	end
+end
+
 function Rolls:Initialize()
 	if self.frame then
 		return
 	end
 	self.pending = {}
+	self.queue = {}
 	local frame = CreateFrame("Frame")
 	self.frame = frame
 	frame:RegisterEvent("START_LOOT_ROLL")
@@ -292,7 +608,7 @@ function Rolls:Initialize()
 		elseif event == "CONFIRM_LOOT_ROLL" then
 			Rolls:OnConfirm(rollID, rollType)
 		else
-			Rolls.pending[rollID] = nil
+			Rolls:OnCancel(rollID)
 		end
 	end)
 end
