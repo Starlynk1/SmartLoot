@@ -2,7 +2,7 @@
 ## Title: Smart Loot
 ## Notes: Loot the most important items first and make bag space for them.
 ## Author: Starlynk
-## Version: 0.1.3
+## Version: 0.1.4
 ## SavedVariables: SmartLootDB
 ## OptionalDeps: Baganator, RXPGuides, Pawn
 ## DefaultState: enabled
@@ -29,5 +29,6 @@ Loot/Rolls.lua
 UI/Skin.lua
 UI/DecisionFrame.lua
 UI/OptionsFrame.lua
+UI/DeleteFrame.lua
 UI/MinimapButton.lua
 UI/EditMode.lua

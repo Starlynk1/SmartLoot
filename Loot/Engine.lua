@@ -897,8 +897,8 @@ function Engine:WantedStillOnCorpse()
 	return false
 end
 
--- This addon turns autoLootDefault off, so after a hardware delete we loot the
--- planned takes the same way RestedXP autoloots remaining slots on clickFrame.
+-- After a hardware delete, loot the planned takes the same way RestedXP
+-- autoloots remaining slots on clickFrame.
 function Engine:LootRemainingWanted()
 	if not LootSlot or not GetNumLootItems then
 		return
@@ -2217,4 +2217,89 @@ function Engine:OnBindConfirm(slot)
 		ConfirmLootSlot(slot)
 	end
 	self:HideDialog("LOOT_BIND")
+end
+
+function Engine:BusyForManualDelete()
+	return self.state ~= "idle" or self.autoDestroying or self.inDelete or self.deleteOnRelease
+end
+
+function Engine:BeginManualDelete(item)
+	if not item or item.bag == nil or item.slot == nil then
+		return false
+	end
+	if self:BusyForManualDelete() then
+		addon.Print("Finish looting first.")
+		return false
+	end
+	if item.protected then
+		addon.Print("That item is protected.")
+		return false
+	end
+	if addon.IsHearthstone(item) then
+		addon.Print("Refused to delete the Hearthstone.")
+		return false
+	end
+	if addon.IsProfessionTool(item) then
+		addon.Print("Refused to delete a profession tool.")
+		return false
+	end
+	if addon.IsSummonedKeep(item) then
+		addon.Print("Refused to delete a summoned item.")
+		return false
+	end
+	if addon.IsSpellReagent(item) then
+		addon.Print("Refused to delete a spell reagent.")
+		return false
+	end
+	if C_Container and C_Container.GetContainerItemID then
+		local id = C_Container.GetContainerItemID(item.bag, item.slot)
+		if item.itemID and id ~= item.itemID then
+			addon.Print((item.name or "That item") .. " is no longer in that slot.")
+			return false
+		end
+	end
+	if self:IsClassicEraClient() then
+		self:CloseLootForDelete()
+	end
+	C_Container.PickupContainerItem(item.bag, item.slot)
+	if not CursorHasItem or not CursorHasItem() then
+		addon.Print("Could not pick up " .. (item.name or "an item") .. ".")
+		return false
+	end
+	self.manualDeleteItem = item
+	return true
+end
+
+function Engine:FinishManualDelete()
+	local item = self.manualDeleteItem
+	self.manualDeleteItem = nil
+	if not item then
+		self:ClearCursorItem()
+		return
+	end
+	if not DeleteCursorItem then
+		self:ClearCursorItem()
+		return
+	end
+	DeleteCursorItem()
+	if self:DialogShown("DELETE_GOOD_ITEM") or self:DialogShown("DELETE_GOOD_QUEST_ITEM") then
+		return
+	end
+	if self:DialogShown("DELETE_QUEST_ITEM") then
+		self:HideDialog("DELETE_QUEST_ITEM")
+		self:ClearCursorItem()
+		addon.Print("Refused to delete a quest item.")
+		return
+	end
+	if self:DialogShown("DELETE_ITEM") and not self:IsClassicEraClient() then
+		self:AcceptDialog("DELETE_ITEM")
+	end
+	if CursorHasItem and CursorHasItem() then
+		self:ClearCursorItem()
+	end
+end
+
+function Engine:CancelManualDelete()
+	self.manualDeleteItem = nil
+	self:ClearCursorItem()
 end

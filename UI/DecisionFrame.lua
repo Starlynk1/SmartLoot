@@ -654,13 +654,14 @@ end
 
 function Decision:SetPreview(active)
 	self:Initialize()
+	local confirming = addon.Engine and addon.Engine:GetState() == "confirming"
 	if active then
-		if addon.Engine:GetState() ~= "confirming" then
+		if not confirming then
 			self:ShowPlan(SAMPLE, true)
 		else
 			self.frame:Show()
 		end
-	elseif addon.Engine:GetState() ~= "confirming" then
+	elseif not confirming then
 		self.preview = false
 		self.frame:Hide()
 	end

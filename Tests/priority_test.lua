@@ -643,4 +643,26 @@ do
 	}))
 end
 
+do
+	local list = SmartLoot.ManualDeleteCandidates({
+		{ name = "Hearthstone", itemID = 6948, quality = 0, unitPrice = 0, count = 1, bag = 0, slot = 1, equipLoc = "" },
+		{ name = "Expensive Grey", quality = 0, unitPrice = 500, count = 1, bag = 0, slot = 2, equipLoc = "" },
+		{ name = "Cheap Grey", quality = 0, unitPrice = 5, count = 1, bag = 0, slot = 3, equipLoc = "" },
+		{ name = "White Cloth", quality = 1, unitPrice = 30, count = 1, bag = 0, slot = 4, equipLoc = "", isReagent = true, classID = 7, subclassID = 5 },
+		{ name = "Usable Sword", quality = 1, unitPrice = 1, count = 1, bag = 0, slot = 5, equipLoc = "INVTYPE_WEAPON", usable = true },
+		{ name = "Locked", quality = 0, unitPrice = 1, count = 1, bag = 0, slot = 6, equipLoc = "", locked = true },
+		{ name = "Quest Token", quality = 1, unitPrice = 0, count = 1, bag = 0, slot = 7, equipLoc = "", isQuest = true },
+		{ name = "Protected Grey", quality = 0, unitPrice = 1, count = 1, bag = 0, slot = 8, equipLoc = "", protected = true },
+	}, {}, { protectReagents = true })
+	Expect("manual list cheapest first", Names(list) == "Cheap Grey,Expensive Grey")
+	Expect("hearthstone stays off the list", list[1].name ~= "Hearthstone")
+	Expect("usable gear stays off the list", list[1].name ~= "Usable Sword" and list[2] and list[2].name ~= "Usable Sword")
+	Expect("protected items stay off the list", list[1].name ~= "Protected Grey" and list[2].name ~= "Protected Grey")
+	local withProtected = SmartLoot.ManualDeleteCandidates({
+		{ name = "Cheap Grey", quality = 0, unitPrice = 5, count = 1, bag = 0, slot = 3, equipLoc = "" },
+		{ name = "Protected Grey", quality = 0, unitPrice = 1, count = 1, bag = 0, slot = 8, equipLoc = "", protected = true },
+	}, {}, { protectReagents = true, includeProtected = true })
+	Expect("protected items can be shown", Names(withProtected) == "Protected Grey,Cheap Grey")
+end
+
 print("priority checks passed: " .. checks)

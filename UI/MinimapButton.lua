@@ -67,6 +67,35 @@ function MinimapButton:SetAngleFromCursor()
 	self:Place()
 end
 
+function MinimapButton:ClickButtonName(...)
+	local first, second = ...
+	if first == "LeftButton" or first == "RightButton" then
+		return first
+	end
+	if second == "LeftButton" or second == "RightButton" then
+		return second
+	end
+	if type(second) == "table" and type(second.buttonName) == "string" then
+		return second.buttonName
+	end
+	if type(first) == "table" and type(first.buttonName) == "string" then
+		return first.buttonName
+	end
+	return "LeftButton"
+end
+
+function MinimapButton:OnClick(mouseButton)
+	if mouseButton == "RightButton" then
+		if addon.Options then
+			addon.Options:Toggle()
+		end
+		return
+	end
+	if addon.DeleteList then
+		addon.DeleteList:Toggle()
+	end
+end
+
 function MinimapButton:CompartmentData()
 	if self.compartmentData then
 		return self.compartmentData
@@ -75,15 +104,14 @@ function MinimapButton:CompartmentData()
 		smartLoot = true,
 		text = "Smart Loot",
 		icon = ICON,
-		func = function()
-			if addon.Options then
-				addon.Options:Toggle()
-			end
+		func = function(...)
+			MinimapButton:OnClick(MinimapButton:ClickButtonName(...))
 		end,
 		funcOnEnter = function(button)
 			GameTooltip:SetOwner(button, "ANCHOR_LEFT")
 			GameTooltip:SetText("SmartLoot")
-			GameTooltip:AddLine("Open options", 1, 1, 1)
+			GameTooltip:AddLine("Left-click: destroy list", 1, 1, 1)
+			GameTooltip:AddLine("Right-click: options", 1, 1, 1)
 			GameTooltip:Show()
 		end,
 		funcOnLeave = function()
@@ -137,7 +165,7 @@ function MinimapButton:BuildButton()
 	button:SetSize(31, 31)
 	button:SetFrameStrata("MEDIUM")
 	button:SetFrameLevel((Minimap:GetFrameLevel() or 0) + 8)
-	button:RegisterForClicks("LeftButtonUp")
+	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	button:RegisterForDrag("LeftButton")
 
 	-- Round SmartLoot-Minimap art is authored for a centered tracking hole.
@@ -170,20 +198,19 @@ function MinimapButton:BuildButton()
 		MinimapButton:SetAngleFromCursor()
 		self.dragged = true
 	end)
-	button:SetScript("OnClick", function(self)
+	button:SetScript("OnClick", function(self, mouseButton)
 		if self.dragged then
 			self.dragged = false
 			return
 		end
-		if addon.Options then
-			addon.Options:Toggle()
-		end
+		MinimapButton:OnClick(mouseButton)
 	end)
 	button:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
 		GameTooltip:SetText("SmartLoot")
-		GameTooltip:AddLine("Drag around the minimap", 1, 1, 1)
-		GameTooltip:AddLine("Click to open options", 1, 1, 1)
+		GameTooltip:AddLine("Left-click: destroy list", 1, 1, 1)
+		GameTooltip:AddLine("Right-click: options", 1, 1, 1)
+		GameTooltip:AddLine("Drag: move this icon", 1, 1, 1)
 		GameTooltip:Show()
 	end)
 	button:SetScript("OnLeave", function()

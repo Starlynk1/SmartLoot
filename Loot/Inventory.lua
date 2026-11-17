@@ -222,7 +222,11 @@ function Inventory.ScanNow()
 end
 
 function Inventory.RefreshCache()
-	return Inventory.ScanNow()
+	local items, freeSlots = Inventory.ScanNow()
+	if addon.DeleteList and addon.DeleteList.RefreshIfShown then
+		addon.DeleteList:RefreshIfShown()
+	end
+	return items, freeSlots
 end
 
 function Inventory.Scan(callback)

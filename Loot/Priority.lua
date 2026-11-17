@@ -653,3 +653,39 @@ function addon.BuildPlan(lootItems, bagItems, freeSlots, options)
 		leftBehind = leftBehind,
 	}
 end
+
+-- Cheapest vendor value first. Marked junk, quality, and bag slot break ties.
+function addon.SortManualDelete(left, right)
+	local leftValue = left.value or 0
+	local rightValue = right.value or 0
+	if leftValue ~= rightValue then
+		return leftValue < rightValue
+	end
+	return addon.SortDestroyCandidate(left, right)
+end
+
+-- Bag items the player can delete by hand: not locked, not a keep, not usable
+-- or transmog gear. Soul shards follow the same keep/capacity rules as loot.
+function addon.ManualDeleteCandidates(bagItems, freeSlots, options)
+	options = options or {}
+	bagItems = bagItems or {}
+	freeSlots = freeSlots or {}
+	local soul = BuildSoulState(bagItems, freeSlots, options)
+	local neededItemIDs = {}
+	local list = {}
+	for _, item in ipairs(bagItems) do
+		if not item.locked then
+			local copy = ShallowCopy(item)
+			copy.value = addon.ItemValue(item)
+			if copy.markedJunk == nil and addon.IsMarkedJunk then
+				copy.markedJunk = addon.IsMarkedJunk(copy) and true or false
+			end
+			local deletable = not IsNeededItem(copy, options, neededItemIDs, soul) and not IsKeepableGear(copy)
+			if deletable or (options.includeProtected and copy.protected) then
+				list[#list + 1] = copy
+			end
+		end
+	end
+	table.sort(list, addon.SortManualDelete)
+	return list
+end

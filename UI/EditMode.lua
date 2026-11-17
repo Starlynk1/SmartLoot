@@ -63,20 +63,34 @@ function EditMode:Frame()
 end
 
 function EditMode:GetActiveLayoutIndex()
-	if C_EditMode and C_EditMode.GetLayouts then
-		local info = C_EditMode.GetLayouts()
-		if info and info.activeLayout then
-			return info.activeLayout
+	local ok, info = pcall(function()
+		if C_EditMode and C_EditMode.GetLayouts then
+			return C_EditMode.GetLayouts()
 		end
+	end)
+	local index = ok and info and tonumber(info.activeLayout)
+	if index and index > 0 then
+		return index
 	end
 	return 1
 end
 
-function EditMode:Saved(index)
+function EditMode:EnsureLayouts()
 	if not addon.db then
 		return nil
 	end
-	local layouts = addon.db.layouts
+	if type(addon.db.layouts) ~= "table" then
+		addon.db.layouts = {}
+	end
+	return addon.db.layouts
+end
+
+function EditMode:Saved(index)
+	local layouts = self:EnsureLayouts()
+	if not layouts then
+		return nil
+	end
+	index = tonumber(index) or 1
 	layouts[index] = layouts[index] or {}
 	if not layouts[index].decision then
 		if addon.db.decision then
@@ -127,8 +141,11 @@ function EditMode:Store()
 	if not self.working or not addon.db then
 		return
 	end
-	local index = self.index or self:GetActiveLayoutIndex()
-	local layouts = addon.db.layouts
+	local index = tonumber(self.index) or self:GetActiveLayoutIndex()
+	local layouts = self:EnsureLayouts()
+	if not layouts then
+		return
+	end
 	layouts[index] = layouts[index] or {}
 	local entry = CopyEntry(self.working)
 	layouts[index].decision = entry
@@ -210,7 +227,25 @@ function EditMode:EnsureSelection()
 		return
 	end
 	local selection = CreateFrame("Frame", nil, frame)
-	selection:SetAllPoints(frame)
+	local function MatchFrameSize()
+		local width = frame:GetWidth() or 0
+		local height = frame:GetHeight() or 0
+		-- Left stays on the frame edge. Top, right, and bottom keep the
+		-- original 8px highlight overflow.
+		local top, right, bottom = 8, 8, 8
+		local highlightWidth = width + right
+		local highlightHeight = height + top + bottom
+		selection:ClearAllPoints()
+		selection:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, top)
+		selection:SetSize(highlightWidth, highlightHeight)
+		if selection.Background then
+			selection.Background:ClearAllPoints()
+			selection.Background:SetPoint("TOPLEFT", selection, "TOPLEFT", 0, 0)
+			selection.Background:SetSize(highlightWidth, highlightHeight)
+		end
+	end
+	MatchFrameSize()
+	frame:HookScript("OnSizeChanged", MatchFrameSize)
 	if frame.SetClipsChildren then
 		frame:SetClipsChildren(false)
 	end
@@ -225,10 +260,11 @@ function EditMode:EnsureSelection()
 	if background.SetTextureSliceMode then
 		pcall(background.SetTextureSliceMode, background, 0)
 	end
-	background:SetPoint("TOPLEFT", selection, "TOPLEFT", -8, 8)
-	background:SetPoint("BOTTOMRIGHT", selection, "BOTTOMRIGHT", 8, -8)
+	background:SetPoint("TOPLEFT", selection, "TOPLEFT", 0, 0)
+	background:SetSize(frame:GetWidth() or 0, frame:GetHeight() or 0)
 	background:SetAlpha(0.62)
 	selection.Background = background
+	MatchFrameSize()
 
 	local hint = selection:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 	hint:SetPoint("CENTER", selection, "CENTER", 0, 0)
@@ -326,10 +362,10 @@ function EditMode:EnsureSelection()
 			if frame.Selection then
 				frame.Selection:Hide()
 			end
-			if not EditMode:IsActive() then
+			if not EditMode:IsActive() or not EditMode:ShouldShowFrame() then
 				return
 			end
-			local state = addon.Engine and addon.Engine:GetState()
+			local state = addon.Engine and addon.Engine.GetState and addon.Engine:GetState()
 			if state == "confirming" or state == "deleting" or state == "working" then
 				return
 			end
@@ -724,26 +760,234 @@ function EditMode:Reset()
 	end
 end
 
+function EditMode:ShouldShowFrame()
+	return not addon.db or addon.db.editModeShowFrame ~= false
+end
+
+function EditMode:RegisterManagerTab(tab)
+	local registry = _G.EditModeAddonSideTabs
+	if type(registry) ~= "table" then
+		registry = {}
+		_G.EditModeAddonSideTabs = registry
+	end
+	for index = 1, #registry do
+		if registry[index] and registry[index].frame == tab then
+			return
+		end
+	end
+	registry[#registry + 1] = {
+		addon = "SmartLoot",
+		frame = tab,
+	}
+end
+
+function EditMode:IsManagerSideTab(frame, parent)
+	if not frame or frame == self.managerTab or not frame.GetPoint then
+		return false
+	end
+	if frame.isEditModeSideTab then
+		return true
+	end
+	local points = frame.GetNumPoints and frame:GetNumPoints() or 1
+	for index = 1, points do
+		local point, relative, relativePoint = frame:GetPoint(index)
+		if relative == parent and (relativePoint == "TOPRIGHT" or relativePoint == "RIGHT" or relativePoint == "BOTTOMRIGHT") then
+			if point == "TOPLEFT" or point == "LEFT" or point == "BOTTOMLEFT" then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function EditMode:FindLowestManagerSideTab(parent, ignore)
+	local lowest
+	local lowestBottom
+	local function Consider(frame)
+		if not frame or frame == ignore or not frame.IsShown or not frame:IsShown() then
+			return
+		end
+		if not self:IsManagerSideTab(frame, parent) then
+			return
+		end
+		local bottom = frame.GetBottom and frame:GetBottom()
+		if not bottom then
+			return
+		end
+		if not lowestBottom or bottom < lowestBottom then
+			lowest = frame
+			lowestBottom = bottom
+		end
+	end
+	local registry = _G.EditModeAddonSideTabs
+	if type(registry) == "table" then
+		for index = 1, #registry do
+			Consider(registry[index] and registry[index].frame)
+		end
+	end
+	if parent.GetChildren then
+		local children = { parent:GetChildren() }
+		for index = 1, #children do
+			Consider(children[index])
+		end
+	end
+	return lowest
+end
+
+function EditMode:PlaceManagerTab()
+	local tab = self.managerTab
+	local parent = EditModeManagerFrame
+	if not tab or not parent then
+		return
+	end
+	tab:ClearAllPoints()
+	local previous = self:FindLowestManagerSideTab(parent, tab)
+	if previous then
+		tab:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -8)
+	else
+		tab:SetPoint("TOPLEFT", parent, "TOPRIGHT", 0, -36)
+	end
+end
+
+function EditMode:ApplyFrameVisibility()
+	if not self.active then
+		return
+	end
+	if self:ShouldShowFrame() then
+		if addon.Decision then
+			addon.Decision:SetPreview(true)
+		end
+		local frame = self:Frame()
+		if self.selected then
+			self:Select()
+		elseif frame and frame.Selection and frame.Selection.ShowHighlighted then
+			frame.Selection:ShowHighlighted()
+		end
+		return
+	end
+	self.selected = false
+	self:HidePanel()
+	self:UpdateKeyboard()
+	local frame = self:Frame()
+	if frame and frame.Selection then
+		frame.Selection:Hide()
+	end
+	if addon.Decision then
+		addon.Decision:SetPreview(false)
+	end
+end
+
+function EditMode:SetShowFrame(show)
+	show = show and true or false
+	if addon.db then
+		addon.db.editModeShowFrame = show
+	end
+	if self.showCheck then
+		self.showCheck:SetChecked(show)
+	end
+	self:ApplyFrameVisibility()
+end
+
+function EditMode:EnsureManagerTab()
+	if self.managerTab or not EditModeManagerFrame then
+		return
+	end
+	local parent = EditModeManagerFrame
+	local tab = CreateFrame("Frame", "SmartLootEditModeManagerTab", parent)
+	tab:SetSize(132, 32)
+	tab.isEditModeSideTab = true
+	tab.editModeAddonTab = "SmartLoot"
+	tab:SetFrameStrata(parent.GetFrameStrata and parent:GetFrameStrata() or "DIALOG")
+	if tab.SetFrameLevel and parent.GetFrameLevel then
+		tab:SetFrameLevel((parent:GetFrameLevel() or 1) + 20)
+	end
+	local notch = tab:CreateTexture(nil, "BACKGROUND")
+	notch:SetTexture("Interface\\SpellBook\\SpellBook-SkillLineTab")
+	notch:SetSize(64, 64)
+	notch:SetPoint("TOPLEFT", -3, 11)
+	local plate = CreateFrame("Frame", nil, tab, BackdropTemplateMixin and "BackdropTemplate" or nil)
+	plate:SetPoint("TOPLEFT", 26, 0)
+	plate:SetPoint("BOTTOMRIGHT", 0, 0)
+	if plate.SetBackdrop then
+		plate:SetBackdrop({
+			bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			tile = true,
+			tileSize = 16,
+			edgeSize = 12,
+			insets = { left = 3, right = 3, top = 3, bottom = 3 },
+		})
+	end
+	local check = CreateFrame("CheckButton", "SmartLootEditModeShowCheck", plate, "UICheckButtonTemplate")
+	check:SetSize(24, 24)
+	check:SetPoint("LEFT", 2, 0)
+	check:SetHitRectInsets(0, -86, 0, 0)
+	local checkText = check.Text or _G["SmartLootEditModeShowCheckText"]
+	if checkText then
+		checkText:SetText("Smart Loot")
+		checkText:SetJustifyH("LEFT")
+		checkText:SetWidth(90)
+		if addon.RegisterFontString then
+			addon.RegisterFontString(tab, checkText)
+		end
+	end
+	check:SetChecked(self:ShouldShowFrame())
+	check:SetScript("OnClick", function(box)
+		EditMode:SetShowFrame(box:GetChecked() and true or false)
+	end)
+	local function ShowTip(owner)
+		if GameTooltip then
+			GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+			GameTooltip:SetText("Smart Loot")
+			GameTooltip:AddLine("Show the loot frame while Edit Mode is open.", 1, 1, 1, true)
+			GameTooltip:Show()
+		end
+	end
+	check:SetScript("OnEnter", function(self)
+		ShowTip(self)
+	end)
+	check:SetScript("OnLeave", function()
+		if GameTooltip then
+			GameTooltip:Hide()
+		end
+	end)
+	self.managerTab = tab
+	self.showCheck = check
+	self:RegisterManagerTab(tab)
+	if not parent.smartLootTabHooked and parent.HookScript then
+		parent.smartLootTabHooked = true
+		parent:HookScript("OnShow", function()
+			EditMode:PlaceManagerTab()
+		end)
+	end
+	self:PlaceManagerTab()
+	if C_Timer and C_Timer.After then
+		C_Timer.After(0, function()
+			EditMode:PlaceManagerTab()
+		end)
+	end
+end
+
 function EditMode:Enter()
 	if not addon.db then
 		return
 	end
 	self.active = true
 	self:Load(self:GetActiveLayoutIndex())
+	if not self.working then
+		self.working = addon.DefaultFrameLayout("decision")
+	end
 	self.baseline = CopyEntry(self.working)
 	self:EnsureSelection()
+	self:EnsureManagerTab()
+	self:PlaceManagerTab()
 	local frame = self:Frame()
 	if frame then
 		self:AttachSnap(frame)
 		frame:SetScript("OnKeyDown", OnNudgeKey)
 	end
-	if addon.Decision then
-		addon.Decision:SetPreview(true)
-	end
-	if frame and frame.Selection and frame.Selection.ShowHighlighted then
-		frame.Selection:ShowHighlighted()
-	end
 	self:Deselect()
+	self:ApplyFrameVisibility()
 end
 
 function EditMode:Exit()

@@ -1,7 +1,7 @@
 local addon = SmartLoot or {}
 SmartLoot = addon
 
-addon.VERSION = "0.1.3"
+addon.VERSION = "0.1.4"
 
 local DEFAULTS = {
 	enabled = true,
@@ -16,6 +16,8 @@ local DEFAULTS = {
 	useAuctionValue = true,
 	autoRoll = false,
 	transmogRoll = "greed",
+	editModeShowFrame = true,
+	showProtectedItems = false,
 	protected = {},
 	minimap = {
 		x = -12,
@@ -61,17 +63,8 @@ function addon.DefaultFrameLayout(key)
 	}
 end
 
-function addon:HoldAutoLoot()
-	if self.db.savedAutoLoot == nil and GetCVar then
-		self.db.savedAutoLoot = GetCVar("autoLootDefault")
-	end
-	if SetCVar then
-		SetCVar("autoLootDefault", "0")
-	end
-end
-
 function addon:ReleaseAutoLoot()
-	if self.db.savedAutoLoot ~= nil and SetCVar then
+	if self.db and self.db.savedAutoLoot ~= nil and SetCVar then
 		SetCVar("autoLootDefault", self.db.savedAutoLoot)
 		self.db.savedAutoLoot = nil
 	end
@@ -80,7 +73,6 @@ end
 function addon:SetEnabled(enabled, quiet)
 	self.db.enabled = enabled and true or false
 	if self.db.enabled then
-		self:HoldAutoLoot()
 		if self.Engine then
 			self.Engine:Enable()
 		end
@@ -88,7 +80,6 @@ function addon:SetEnabled(enabled, quiet)
 		if self.Engine then
 			self.Engine:Disable()
 		end
-		self:ReleaseAutoLoot()
 	end
 	if self.Options and self.Options.Refresh then
 		self.Options:Refresh()
@@ -163,6 +154,7 @@ function addon:Initialize()
 	end
 	self.db.autoRoll = false
 	self.db.rollMinItemLevel = nil
+	self:ReleaseAutoLoot()
 	if self.Decision then
 		self.Decision:Initialize()
 	end
